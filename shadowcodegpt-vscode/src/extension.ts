@@ -1,39 +1,148 @@
-import * as vscode from 'vscode';
-import AuthSettings from './authSettings';
+import * as path from 'path';
+import {
+    workspace as Workspace, window as Window, ExtensionContext, TextDocument, OutputChannel, WorkspaceFolder, Uri
+} from 'vscode';
+const vscode = require('vscode');
 
-export function activate(context: vscode.ExtensionContext) {
-    console.log('Congratulations, your extension "shadowcodegpt" is now active!');
+import {
+    LanguageClient, LanguageClientOptions, TransportKind
+} from 'vscode-languageclient/node';
 
-    // Initialize AuthSettings
-    AuthSettings.init(context);
-    const settings = AuthSettings.instance;
+let defaultClient: LanguageClient;
+const clients: Map<string, LanguageClient> = new Map();
+
+let _sortedWorkspaceFolders: string[] | undefined;
+function sortedWorkspaceFolders(): string[] {
+    if (_sortedWorkspaceFolders === void 0) {
+        _sortedWorkspaceFolders = Workspace.workspaceFolders ? Workspace.workspaceFolders.map(folder => {
+            let result = folder.uri.toString();
+            if (result.charAt(result.length - 1) !== '/') {
+                result = result + '/';
+            }
+            return result;
+        }).sort(
+            (a, b) => {
+                return a.length - b.length;
+            }
+        ) : [];
+    }
+    return _sortedWorkspaceFolders;
+}
+Workspace.onDidChangeWorkspaceFolders(() => _sortedWorkspaceFolders = undefined);
+
+function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
+    const sorted = sortedWorkspaceFolders();
+    for (const element of sorted) {
+        let uri = folder.uri.toString();
+        if (uri.charAt(uri.length - 1) !== '/') {
+            uri = uri + '/';
+        }
+        if (uri.startsWith(element)) {
+            return Workspace.getWorkspaceFolder(Uri.parse(element))!;
+        }
+    }
+    return folder;
+}
+
+export function activate(context: ExtensionContext) {
+
+    console.log("Extension is now active!"); // 添加日志
 
     // Register the helloWorld command
     let helloWorldDisposable = vscode.commands.registerCommand('shadowcodegpt.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from ShadowCodeGPT!');
     });
 
-    // Register the storeApiKey command
-    let storeApiKeyDisposable = vscode.commands.registerCommand('shadowcodegpt.storeApiKey', async () => {
-        const apiKey = await vscode.window.showInputBox({ prompt: 'Please enter your API key' });
-        if (apiKey) {
-            await settings.storeApiKey(apiKey);
-            vscode.window.showInformationMessage('API key successfully stored!');
+    context.subscriptions.push(helloWorldDisposable);
+
+    const module = context.asAbsolutePath(path.join('server', 'server.py'));
+    const outputChannel: OutputChannel = Window.createOutputChannel('lsp-multi-server-example');
+
+    function didOpenTextDocument(document: TextDocument): void {
+        // We are only interested in language mode text
+        // if (document.languageId !== 'plaintext' || (document.uri.scheme !== 'file' && document.uri.scheme !== 'untitled')) {
+        // 	return;
+        // }
+
+        const uri = document.uri;
+        // Untitled files go to a default client.
+        if (uri.scheme === 'untitled' && !defaultClient) {
+            const serverOptions = {
+                run: { command: 'python', args: [module], transport: TransportKind.stdio },
+                debug: { command: 'python', args: [module], transport: TransportKind.stdio }
+            };
+            const clientOptions: LanguageClientOptions = {
+                documentSelector: [
+                    { scheme: 'untitled', language: 'plaintext' }
+                ],
+                diagnosticCollectionName: 'lsp-multi-server-example',
+                outputChannel: outputChannel
+            };
+            defaultClient = new LanguageClient('lsp-multi-server-example', 'LSP Multi Server Example', serverOptions, clientOptions);
+            defaultClient.start();
+            return;
+        }
+        let folder = Workspace.getWorkspaceFolder(uri);
+        // Files outside a folder can't be handled. This might depend on the language.
+        // Single file languages like JSON might handle files outside the workspace folders.
+        if (!folder) {
+            return;
+        }
+        // If we have nested workspace folders we only start a server on the outer most workspace folder.
+        folder = getOuterMostWorkspaceFolder(folder);
+
+        if (!clients.has(folder.uri.toString())) {
+            const serverOptions = {
+                run: { module, transport: TransportKind.ipc },
+                debug: { module, transport: TransportKind.ipc }
+            };
+            const clientOptions: LanguageClientOptions = {
+                documentSelector: [
+                    { scheme: 'file', language: 'plaintext', pattern: `${folder.uri.fsPath}/**/*` }
+                ],
+                diagnosticCollectionName: 'lsp-multi-server-example',
+                workspaceFolder: folder,
+                outputChannel: outputChannel
+            };
+            const client = new LanguageClient('lsp-multi-server-example', 'LSP Multi Server Example', serverOptions, clientOptions);
+
+
+            // 在启动 client 之前输出日志信息
+            console.log('LanguageClient instance is created.');
+
+            client.start();
+
+            console.log('LanguageClient is started.');
+
+            clients.set(folder.uri.toString(), client);
+
+            console.log('LanguageClient is setted.');
+
+
+
+        }
+    }
+
+    Workspace.onDidOpenTextDocument(didOpenTextDocument);
+    Workspace.textDocuments.forEach(didOpenTextDocument);
+    Workspace.onDidChangeWorkspaceFolders((event) => {
+        for (const folder of event.removed) {
+            const client = clients.get(folder.uri.toString());
+            if (client) {
+                clients.delete(folder.uri.toString());
+                client.stop();
+            }
         }
     });
-
-    // Register the retrieveApiKey command
-    let retrieveApiKeyDisposable = vscode.commands.registerCommand('shadowcodegpt.retrieveApiKey', async () => {
-        const apiKey = await settings.retrieveApiKey();
-        if (apiKey) {
-            vscode.window.showInformationMessage(apiKey);
-        } else {
-            vscode.window.showWarningMessage('No API key found, please store it first.');
-        }
-    });
-
-    // Add the disposables to the context.subscriptions array
-    context.subscriptions.push(helloWorldDisposable, storeApiKeyDisposable, retrieveApiKeyDisposable);
 }
 
-export function deactivate() {}
+export function deactivate(): Thenable<void> {
+    const promises: Thenable<void>[] = [];
+    if (defaultClient) {
+        promises.push(defaultClient.stop());
+    }
+    for (const client of clients.values()) {
+        promises.push(client.stop());
+    }
+    return Promise.all(promises).then(() => undefined);
+}
