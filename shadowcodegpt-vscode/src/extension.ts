@@ -49,14 +49,10 @@ function getOuterMostWorkspaceFolder(folder: WorkspaceFolder): WorkspaceFolder {
 
 export function activate(context: ExtensionContext) {
 
-	const module = context.asAbsolutePath(path.join('dist', 'server.js'));
+	const module = context.asAbsolutePath(path.join('dist', 'server', 'server.js'));
 	const outputChannel: OutputChannel = Window.createOutputChannel('lsp-multi-server-example');
 
 	function didOpenTextDocument(document: TextDocument): void {
-		// We are only interested in language mode text
-		if (document.languageId !== 'plaintext' || (document.uri.scheme !== 'file' && document.uri.scheme !== 'untitled')) {
-			return;
-		}
 
 		const uri = document.uri;
 		// Untitled files go to a default client.
@@ -67,7 +63,8 @@ export function activate(context: ExtensionContext) {
 			};
 			const clientOptions: LanguageClientOptions = {
 				documentSelector: [
-					{ scheme: 'untitled', language: 'plaintext' }
+					// { scheme: 'untitled', language: 'plaintext' },
+					{ scheme: 'untitled' }
 				],
 				diagnosticCollectionName: 'lsp-multi-server-example',
 				outputChannel: outputChannel
@@ -92,8 +89,11 @@ export function activate(context: ExtensionContext) {
 			};
 			const clientOptions: LanguageClientOptions = {
 				documentSelector: [
-					{ scheme: 'file', language: 'plaintext', pattern: `${folder.uri.fsPath}/**/*` }
+					{ scheme: 'file', pattern: `${folder.uri.fsPath}/**/*` }
 				],
+				// documentSelector: [
+				// 	{ scheme: 'file', language: 'plaintext', pattern: `${folder.uri.fsPath}/**/*` }
+				// ],
 				diagnosticCollectionName: 'lsp-multi-server-example',
 				workspaceFolder: folder,
 				outputChannel: outputChannel

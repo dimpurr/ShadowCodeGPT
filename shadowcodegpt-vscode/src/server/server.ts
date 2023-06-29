@@ -22,7 +22,7 @@ const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
 let workspaceFolder: string | null;
 
 documents.onDidOpen((event) => {
-	connection.console.log(`[Server(${process.pid}) ${workspaceFolder}] Document opened: ${event.document.uri}`);
+	connection.console.log(`[Server(${process.pid}) ${workspaceFolder}] Document opened: ${event.document.uri} which is ${event.document.getText()}`);
 });
 documents.listen(connection);
 
