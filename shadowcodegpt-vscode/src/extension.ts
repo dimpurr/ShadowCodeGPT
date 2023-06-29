@@ -2,6 +2,7 @@ import * as path from 'path';
 import { workspace as Workspace, window as Window, ExtensionContext, OutputChannel, commands } from 'vscode';
 import { setupLanguageClient, deactivateLanguageClient } from './languageClient';
 import AuthSettings from './authSettings';
+import { chatWithGPT } from './GPTUtils/ChatGPT'; // Add this import
 
 export function activate(context: ExtensionContext) {
     const outputChannel: OutputChannel = Window.createOutputChannel('lsp-multi-server-example');
@@ -26,6 +27,11 @@ export function activate(context: ExtensionContext) {
         } else {
             Window.showInformationMessage('No API key found.');
         }
+    }));
+
+    // Register the chatWithGPT command
+    context.subscriptions.push(commands.registerCommand('shadowcodegpt.helloWorld', async () => {
+        chatWithGPT(message => Window.showInformationMessage(message));
     }));
 }
 
