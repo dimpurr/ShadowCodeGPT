@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { workspace as Workspace, window as Window, ExtensionContext, OutputChannel, commands, SecretStorage } from 'vscode';
+import { workspace as Workspace, window as Window, ExtensionContext, OutputChannel, commands } from 'vscode';
 import { setupLanguageClient, deactivateLanguageClient } from './languageClient';
 import AuthSettings from './authSettings';
 
@@ -9,14 +9,23 @@ export function activate(context: ExtensionContext) {
 
     AuthSettings.init(context);
 
-    context.subscriptions.push(commands.registerCommand('command.storeApiKey', async () => {
-        const apiKey = "your-api-key"; // Retrieve API key from user input or configuration
-        await AuthSettings.instance.storeApiKey(apiKey);
+    context.subscriptions.push(commands.registerCommand('shadowcodegpt.storeApiKey', async () => {
+        const apiKey = await Window.showInputBox({ prompt: 'Enter your API key' });
+        if (apiKey) {
+            await AuthSettings.instance.storeApiKey(apiKey);
+            Window.showInformationMessage('API key stored successfully.');
+        } else {
+            Window.showInformationMessage('No API key entered.');
+        }
     }));
 
-    context.subscriptions.push(commands.registerCommand('command.retrieveApiKey', async () => {
+    context.subscriptions.push(commands.registerCommand('shadowcodegpt.retrieveApiKey', async () => {
         const apiKey = await AuthSettings.instance.retrieveApiKey();
-        console.log(apiKey); // Do something with the API key
+        if (apiKey) {
+            Window.showInformationMessage(`Your API key is: ${apiKey}`);
+        } else {
+            Window.showInformationMessage('No API key found.');
+        }
     }));
 }
 
