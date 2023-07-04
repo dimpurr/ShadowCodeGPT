@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <style>
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #F6F6F6;
+            border-radius: 4px;
+        }
+    </style>
+    <!-- <script src="sidebar.js"></script> -->
+    <script>window.onload = function () {
+            const analyzeButton = document.getElementById('analyzeButton');
+            const resultArea = document.getElementById('resultArea');
+
+            analyzeButton.addEventListener('click', function () {
+                resultArea.innerHTML = 'Analyzing...';
+
+                vscode.postMessage({
+                    command: 'analyzeFile'
+                });
+            });
+
+            // 监听来自扩展的消息
+            window.addEventListener('message', function (event) {
+                const message = event.data;
+                if (message.command === 'showResult') {
+                    resultArea.innerHTML = message.result;
+                }
+            });
+        };
+</script>
+</head>
+
+<body>
+    <button id="analyzeButton">分析当前文件</button>
+    <div class="result" id="resultArea"></div>
+</body>
+
+</html>

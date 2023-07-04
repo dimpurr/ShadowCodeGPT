@@ -12,6 +12,17 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "yourSidebarView",
+          "name": "Your Sidebar",
+          "when": "explorerResourceScheme == file",
+          "icon": "your-icon.svg",
+          "webview": "sidebar/sidebar.html"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "shadowcodegpt.helloWorld",
