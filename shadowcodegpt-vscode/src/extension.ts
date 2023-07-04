@@ -56,36 +56,42 @@ export function activate(context: ExtensionContext) {
     // }));
 
 
-    context.subscriptions.push(vscode.commands.registerCommand('shadowcodegpt.helloWorld', async () => {
-        if (panel) {
-            panel.reveal(vscode.ViewColumn.Beside);
-        } else {
-            panel = vscode.window.createWebviewPanel(
-                'shadowcodegptSidebar', // 唯一标识符，用于区分不同的面板
-                'ShadowCode GPT', // 面板标题
-                vscode.ViewColumn.Beside, // 面板打开的位置
-                {
-                    enableScripts: true // 允许在 Webview 中运行脚本
-                }
-            );
+    context.subscriptions.push(
+        vscode.commands.registerCommand('shadowcodegpt.helloWorld', () => {
+            if (panel) {
+                panel.reveal(vscode.ViewColumn.Beside);
+            } else {
+                panel = vscode.window.createWebviewPanel(
+                    'shadowcodegptSidebar',
+                    'ShadowCode GPT',
+                    vscode.ViewColumn.Beside,
+                    {
+                        enableScripts: true
+                    }
+                );
 
-            panel.webview.html = getWebviewContent(context.extensionPath, panel.webview);
-
-            panel.onDidDispose(() => {
-                panel = undefined;
-            });
-        }
-    }));
+                const webviewContentPath = vscode.Uri.file(
+                    path.join(context.extensionPath, 'src/sidebar/sidebar.html')
+                );
+                panel.webview.html = getWebviewContent(webviewContentPath);
+                panel.onDidDispose(() => {
+                    panel = undefined;
+                });
+            }
+        })
+    );
 
 
 }
 
-function getWebviewContent(extensionPath: string, webview: vscode.Webview) {
-    const htmlFilePath = path.join(extensionPath, 'src/sidebar/sidebar.html');
-    const htmlContent = fs.readFileSync(htmlFilePath, 'utf-8');
-    return htmlContent;
+function getWebviewContent(webviewContentUri: vscode.Uri) {
+    const webviewContentPath = webviewContentUri.with({ scheme: 'vscode-resource' });
+    return `<iframe src="${webviewContentPath}" frameBorder="0"></iframe>`;
 }
 
 export function deactivate(): Thenable<void> {
+        if (panel) {
+        panel.dispose();
+    }
     return deactivateLanguageClient();
 }

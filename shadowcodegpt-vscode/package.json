@@ -43,6 +43,10 @@
       {
         "command": "shadowcodegpt.RunPythonHelloWorld",
         "title": "Run Python Hello World"
+      },
+      {
+        "command": "shadowcodegpt.analyzeFile",
+        "title": "Analyze File"
       }
     ]
   },

@@ -1,4 +1,6 @@
 window.onload = function () {
+    const vscode = acquireVsCodeApi();
+
     const analyzeButton = document.getElementById('analyzeButton');
     const resultArea = document.getElementById('resultArea');
 
