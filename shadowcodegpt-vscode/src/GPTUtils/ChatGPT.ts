@@ -1,6 +1,8 @@
 import fetch from "node-fetch";
 import AuthSettings from '../authSettings';
 
+const API_URL = 'https://api.openai.com/v1/chat/completions';
+const MODEL_NAME = 'gpt-3.5-turbo';
 
 interface ResponseData {
     choices: Array<{
@@ -8,46 +10,67 @@ interface ResponseData {
     }>;
 }
 
-export async function chatWithGPT(text: string): Promise<string> {
-    const apiKey = await AuthSettings.instance.retrieveApiKey();
-    const apiUrl = 'https://api.openai.com/v1/chat/completions';
-    const prompt = '解释以下代码在干啥：';
-
-    console.log('Starting GPT request...'); // 添加日志输出
-
-    const truncatedText = text.slice(0, 3000); // Take only the first 3000 characters of the text
-
-
-
-    const req = {
+function buildRequestBody(messages: any[], apiKey: string): any {
+    return {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-            model: 'gpt-3.5-turbo',
-            messages: [
-                { "role": "system", "content": "You are a helpful programming assistant." },
-                {
-                    "role": "user", "content": prompt + ' 【代码开头】' + truncatedText + '【代码结尾】，以下是解释：', // 将传入的文本拼接到提示前面
-                }
-            ]
-        }),
-
+            model: MODEL_NAME,
+            messages: messages
+        })
     };
-    console.log(req);
+}
 
-    const response = await fetch(apiUrl, req);
+export async function chatWithGPT(text: string): Promise<string> {
+    try {
+        const apiKey = await AuthSettings.instance.retrieveApiKey();
+        
+        if (typeof apiKey === 'undefined') {
+            console.error('API Key is undefined');
+            return 'Error: API Key is undefined';
+        }
 
-    console.log('GPT request completed.'); // 添加日志输出
+        const batchSize = 3000;
+        const totalBatches = Math.ceil(text.length / batchSize);
+        let finalSummary = "";
 
+        // Initialize messages array with the system message
+        let messages = [
+            { role: "system", content: "You are a helpful programming assistant." }
+        ];
 
-    const data = (await response.json()) as ResponseData;
-    console.log('111', data);
-    if (data.choices && data.choices.length > 0) {
-        return data.choices[0].message.content; // 直接返回结果文本
-    } else {
-        return 'No response';
+        for (let i = 0; i < totalBatches; i++) {
+            const textBatch = text.slice(i * batchSize, (i + 1) * batchSize);
+            const prompt = '解释以下代码在干啥：';
+            let content = `${prompt} 由于这是一个很长的代码，我会分批发送，以下是批次（${i + 1}/${totalBatches}）：【代码开头】${textBatch}【批次（${i + 1}/${totalBatches}）结尾，请返回目前的总结，并准备好接受下一批次（${i + 2}/${totalBatches}）】`;
+            
+            if (i + 1 === totalBatches) {
+                content = `${prompt} 要你分析的要求不变，继续发送代码，【批次（${i + 1}/${totalBatches}）开头】${textBatch}【批次（${i + 1}/${totalBatches}）结尾，请返回目前批次的总结，并对已接收的全部总结一次】`;
+            }
+
+            // Add the new user message to the messages array
+            messages.push({ role: "user", content });
+
+            const requestBody = buildRequestBody(messages, apiKey);
+            console.log('req', requestBody);
+            const response = await fetch(API_URL, requestBody);
+            const data = (await response.json()) as ResponseData;
+
+            if (data.choices && data.choices.length > 0) {
+                // Add the assistant's message to the messages array
+                messages.push({ role: "assistant", content: data.choices[0].message.content });
+                finalSummary += data.choices[0].message.content + "\n";
+            } else {
+                finalSummary += 'No response for this batch.\n';
+            }
+        }
+
+        return finalSummary;
+    } catch (error) {
+        console.error('Error in GPT request:', error);
+        return 'Error during processing';
     }
 }
