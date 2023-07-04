@@ -15,7 +15,7 @@ export async function chatWithGPT(text: string): Promise<string> {
 
     console.log('Starting GPT request...'); // 添加日志输出
 
-    const truncatedText = text.slice(0, 2000); // Take only the first 3000 characters of the text
+    const truncatedText = text.slice(0, 3000); // Take only the first 3000 characters of the text
 
 
 
