@@ -47,7 +47,11 @@
       {
         "command": "shadowcodegpt.analyzeFile",
         "title": "Analyze File"
-      }
+      },
+                  {
+                "command": "shadowcodegpt.checkFileCache",
+                "title": "Check File Cache"
+            }
     ]
   },
   "scripts": {
