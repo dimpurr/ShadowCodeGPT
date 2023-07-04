@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import { chatWithGPT } from './GPTUtils/ChatGPT';
+import * as path from 'path';
+import * as fs from 'fs';
+
 
 export class WebviewProvider {
     private panel: vscode.WebviewPanel | undefined = undefined;
@@ -44,6 +47,7 @@ export class WebviewProvider {
         const htmlContent = `<!DOCTYPE html>
         <html>
         <head>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/1.9.1/showdown.min.js"></script>
             <style>
                 .result {
                     margin-top: 10px;
@@ -66,57 +70,82 @@ export class WebviewProvider {
     }
 
     private getJavaScriptContent() {
-        return `window.onload = function () {
-            const vscode = acquireVsCodeApi();
+    return `window.onload = function () {
+        const vscode = acquireVsCodeApi();
 
-            const analyzeButton = document.getElementById('analyzeButton');
-            const resultArea = document.getElementById('resultArea');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const resultArea = document.getElementById('resultArea');
 
-            analyzeButton.addEventListener('click', function () {
-                resultArea.innerHTML = 'Analyzing...';
-                vscode.postMessage({
-                    command: 'analyzeFile'
-                });
-                resultArea.innerHTML = 'FINPO...';
+        analyzeButton.addEventListener('click', function () {
+            resultArea.innerHTML = 'Analyzing...';
+            vscode.postMessage({
+                command: 'analyzeFile'
             });
+        });
 
-            // 监听来自扩展的消息
-            window.addEventListener('message', function (event) {
-                const message = event.data;
-                if (message.command === 'showResult') {
-                    resultArea.innerHTML = message.result;
-                }
-            });
-        };`;
-    }
+        // 监听来自扩展的消息
+        window.addEventListener('message', function (event) {
+            const message = event.data;
+            if (message.command === 'showResult') {
+                fetch(\`file://\${message.resultPath}\`)
+                    .then(response => response.text())
+                    .then(text => {
+                        const converter = new showdown.Converter();
+                        resultArea.innerHTML = converter.makeHtml(text);
+                    });
+            }
+        });
+    };`;
+}
+
 
     public async analyzeFile() {
-        console.log("analyzeFile method called"); // 确认此方法被调用
+    console.log("analyzeFile method called");
 
-        const activeEditor = vscode.window.activeTextEditor;
-        if (activeEditor) {
-            console.log("Active editor found"); // 确认找到活动编辑器
+    const activeEditor = vscode.window.activeTextEditor;
+    if (activeEditor) {
+        console.log("Active editor found");
 
-            const document = activeEditor.document;
-            const text = document.getText();
+        const document = activeEditor.document;
+        const text = document.getText();
 
-            console.log("Sending text to GPT"); // 确认正在发送文本到 GPT
-            const result = await chatWithGPT(text); // 调用 chatWithGPT 函数，并获取结果
-            console.log("Result from GPT received:", result); // 打印从 GPT 接收到的结果
+        console.log("Sending text to GPT");
+        const result = await chatWithGPT(text);
+        console.log("Result from GPT received:", result);
 
-            // 向侧边栏发送消息，传递结果
+        // 获取文件的相对路径
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (workspaceFolders && workspaceFolders.length > 0) {
+            const workspaceRoot = workspaceFolders[0].uri.fsPath;
+            const relativePath = path.relative(workspaceRoot, document.fileName);
+            const timestamp = new Date().toISOString().replace(/[-:.]/g, "").slice(0, -1);
+            const resultPath = path.join(workspaceRoot, '.vscode', 'shadowcodegpt', 'analyze', relativePath + `.manualAnalyze.${timestamp}.md`);
+
+            // 创建目录
+            const resultDir = path.dirname(resultPath);
+            fs.mkdirSync(resultDir, { recursive: true });
+
+            // 保存结果到 .md 文件
+            fs.writeFileSync(resultPath, result);
+
+            // 向侧边栏发送消息，传递结果文件路径
             if (this.panel && this.panel.webview) {
-                console.log("Sending message to panel"); // 确认正在发送消息到面板
+                console.log("Sending message to panel");
                 this.panel.webview.postMessage({
                     command: 'showResult',
-                    result: result
+                    resultPath: resultPath
                 });
             } else {
-                console.log("Panel not available"); // 如果面板不可用，则记录
+                console.log("Panel not available");
             }
         } else {
-            console.log("No active editor"); // 如果没有活动编辑器，则记录
+            console.log("No workspace folder found");
         }
+
+    } else {
+        console.log("No active editor");
     }
+}
+
 
 }
